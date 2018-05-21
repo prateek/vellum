@@ -20,9 +20,10 @@ import (
 )
 
 var defaultBuilderOpts = &BuilderOpts{
-	Encoder:           1,
-	RegistryTableSize: 10000,
-	RegistryMRUSize:   2,
+	Encoder:                  1,
+	RegistryTableSize:        10000,
+	RegistryMRUSize:          2,
+	UnfinishedNodesStackSize: 64,
 }
 
 // A Builder is used to build a new FST.  When possible data is
@@ -49,7 +50,7 @@ func newBuilder(w io.Writer, opts *BuilderOpts) (*Builder, error) {
 		opts = defaultBuilderOpts
 	}
 	rv := &Builder{
-		unfinished: newUnfinishedNodes(),
+		unfinished: newUnfinishedNodes(opts),
 		registry:   newRegistry(opts.RegistryTableSize, opts.RegistryMRUSize),
 		opts:       opts,
 		lastAddr:   noneAddr,
@@ -188,10 +189,14 @@ func (u *unfinishedNodes) Reset() {
 	u.pushEmpty(false)
 }
 
-func newUnfinishedNodes() *unfinishedNodes {
+func newUnfinishedNodes(opts *BuilderOpts) *unfinishedNodes {
+	initialSize := opts.UnfinishedNodesStackSize
+	if initialSize <= 0 {
+		initialSize = defaultBuilderOpts.UnfinishedNodesStackSize
+	}
 	rv := &unfinishedNodes{
-		stack: make([]*builderNodeUnfinished, 0, 64),
-		cache: make([]builderNodeUnfinished, 64),
+		stack: make([]*builderNodeUnfinished, 0, initialSize),
+		cache: make([]builderNodeUnfinished, initialSize),
 	}
 	rv.pushEmpty(false)
 	return rv
