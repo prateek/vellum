@@ -122,7 +122,7 @@ func (b *Builder) Close() error {
 	if err != nil {
 		return err
 	}
-	root := b.unfinished.popRoot()
+	root := b.unfinished.popEmpty()
 	rootAddr, err := b.compile(root)
 	if err != nil {
 		return err
