@@ -98,7 +98,13 @@ func (r registryCache) entry(node *builderNode) (bool, int, *registryCell) {
 	}
 	// no match
 	last := len(r) - 1
-	r[last].node = node // discard LRU
+	// discard LRU, putting back into pool
+	lastNode := r[last].node
+	if lastNode != nil {
+		lastNode.reset()
+		builderNodePool.Put(lastNode)
+	}
+	r[last].node = node
 	r.promote(last)
 	return false, 0, &r[0]
 

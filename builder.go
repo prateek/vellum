@@ -17,6 +17,7 @@ package vellum
 import (
 	"bytes"
 	"io"
+	"sync"
 )
 
 var defaultBuilderOpts = &BuilderOpts{
@@ -251,17 +252,10 @@ func (u *unfinishedNodes) findCommonPrefixAndSetOutput(key []byte,
 
 func (u *unfinishedNodes) pushEmpty(final bool) {
 	next := u.get()
-	next.node = &builderNode{final: final}
+	node := builderNodePool.Get().(*builderNode)
+	node.final = final
+	next.node = node
 	u.stack = append(u.stack, next)
-}
-
-func (u *unfinishedNodes) popRoot() *builderNode {
-	l := len(u.stack)
-	var unfinished *builderNodeUnfinished
-	u.stack, unfinished = u.stack[:l-1], u.stack[l-1]
-	rv := unfinished.node
-	u.put()
-	return rv
 }
 
 func (u *unfinishedNodes) popFreeze(addr int) *builderNode {
@@ -303,7 +297,7 @@ func (u *unfinishedNodes) addSuffix(bs []byte, out uint64) {
 	u.stack[last].lastOut = out
 	for _, b := range bs[1:] {
 		next := u.get()
-		next.node = &builderNode{}
+		next.node = builderNodePool.Get().(*builderNode)
 		next.hasLastT = true
 		next.lastIn = b
 		next.lastOut = 0
@@ -350,6 +344,30 @@ type builderNode struct {
 	finalOutput uint64
 	trans       []*transition
 	final       bool
+}
+
+func newBuilderNode() *builderNode {
+	return &builderNode{
+		trans: make([]*transition, 0, 8),
+	}
+}
+
+var builderNodePool = sync.Pool{
+	New: func() interface{} { return newBuilderNode() },
+}
+
+var builderNodeZeroed builderNode
+
+func (n *builderNode) reset() {
+	trans := n.trans
+	var empty *transition
+	// compiler optimized to memcpy
+	for i := range trans {
+		trans[i] = empty
+	}
+	trans = trans[:0]
+	*n = builderNodeZeroed
+	n.trans = trans
 }
 
 func (n *builderNode) equiv(o *builderNode) bool {
